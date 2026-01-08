@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Sistema de Frequência de Bolsistas</title>
+<style>
+    body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f4f6f8;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
+    .container {
+        width: 95%;
+        max-width: 1400px;
+        background: #fff;
+        margin-top: 30px;
+        padding: 25px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    h2 { margin: 0 0 5px 0; color: #333; }
+    .info { color: #555; font-size: 14px; margin-bottom: 20px; }
+    .acoes { margin-bottom: 15px; }
+    button {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 5px;
+        background: #0057b8;
+        color: #fff;
+        cursor: pointer;
+        font-size: 14px;
+        margin-right: 5px;
+    }
+    button:hover { background: #004494; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    th { background: #f0f0f0; }
+    input[type="text"], input[type="date"], select { width: 100%; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h2>Sistema de Frequência de Bolsistas</h2>
+    <div class="info" id="infoUsuario"></div>
+    <div class="acoes">
+        <button id="btnAdicionar" onclick="adicionarBolsista()">➕ Adicionar bolsista</button>
+        <button id="btnSalvar" onclick="salvarParaPlanilha()">💾 Salvar/Enviar Planilha</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Campus</th><th>Nome</th><th>Matrícula</th><th>Setor</th>
+                <th>Início</th><th>Fim</th><th>Email Coordenador</th>
+                <th>Jan</th><th>Fev</th><th>Mar</th><th>Abr</th>
+                <th>Mai</th><th>Jun</th><th>Jul</th><th>Ago</th>
+                <th>Set</th><th>Out</th><th>Nov</th><th>Dez</th>
+                <th>Justificativa</th><th>Arquivo</th><th>Ações</th>
+            </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+    </table>
+</div>
+
+<script>
+const emailUsuario = sessionStorage.getItem("emailUsuario");
+const tipoUsuario = sessionStorage.getItem("tipoUsuario"); // "admin" ou "coord"
+if(!emailUsuario || !tipoUsuario){ alert("Acesso inválido"); window.location.href="index.html"; }
+
+document.getElementById("infoUsuario").innerText = `Usuário: ${emailUsuario} | Perfil: ${tipoUsuario==="admin"?"Administrador":"Coordenador"}`;
+if(tipoUsuario!=="admin"){ document.getElementById("btnAdicionar").disabled=true; }
+
+let bolsistas = JSON.parse(localStorage.getItem("bolsistas")) || [];
+
+function renderTabela(){
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+    bolsistas.forEach((b,i)=>{
+        if(tipoUsuario!=="admin" && b.coordenador !== emailUsuario) return;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+        <td><input type="text" value="${b.campus||''}" onchange="atualizar(${i}, 'campus', this.value)" ${tipoUsuario!=="admin"?"disabled":""}></td>
+        <td><input type="text" value="${b.nome||''}" onchange="atualizar(${i}, 'nome', this.value)"></td>
+        <td><input type="text" value="${b.matricula||''}" onchange="atualizar(${i}, 'matricula', this.value)"></td>
+        <td><input type="text" value="${b.setor||''}" onchange="atualizar(${i}, 'setor', this.value)"></td>
+        <td><input type="date" value="${b.vigenciaInicio||''}" onchange="atualizar(${i}, 'vigenciaInicio', this.value)" ${tipoUsuario!=="admin"?"disabled":""}></td>
+        <td><input type="date" value="${b.vigenciaFim||''}" onchange="atualizar(${i}, 'vigenciaFim', this.value)" ${tipoUsuario!=="admin"?"disabled":""}></td>
+        <td><input type="text" value="${b.coordenador||''}" onchange="atualizar(${i}, 'coordenador', this.value)" ${tipoUsuario!=="admin"?"disabled":""}></td>
+        ${["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"].map(m=>
+            `<td><select onchange="atualizarMes(${i}, '${m}', this.value)">
+                <option ${b[m]==="SIM"?"selected":""}>SIM</option>
+                <option ${b[m]==="NÃO"?"selected":""}>NÃO</option>
+            </select></td>`).join("")}
+        <td><input type="text" value="${b.justificativa||''}" onchange="atualizar(${i}, 'justificativa', this.value)"></td>
+        <td><input type="file" onchange="atualizarArquivo(${i}, this.files)"></td>
+        <td>${tipoUsuario==="admin"?`<button onclick="removerBolsista(${i})">Remover</button>`:""}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+    localStorage.setItem("bolsistas", JSON.stringify(bolsistas));
+}
+
+function atualizar(i,campo,valor){ bolsistas[i][campo]=valor; renderTabela(); }
+function atualizarMes(i,mes,valor){ bolsistas[i][mes]=valor; renderTabela(); }
+function atualizarArquivo(i,files){
+    if(files.length>0){
+        const reader = new FileReader();
+        reader.onload = function(e){
+            bolsistas[i].arquivoBlob = Utilities.base64Encode(e.target.result);
+            bolsistas[i].arquivoName = files[0].name;
+            renderTabela();
+        };
+        reader.readAsDataURL(files[0]);
+    }
+}
+
+function adicionarBolsista(){
+    bolsistas.push({ campus:"", nome:"", matricula:"", setor:"", vigenciaInicio:"", vigenciaFim:"", coordenador:"", jan:"NÃO", fev:"NÃO", mar:"NÃO", abr:"NÃO", mai:"NÃO", jun:"NÃO", jul:"NÃO", ago:"NÃO", set:"NÃO", out:"NÃO", nov:"NÃO", dez:"NÃO", justificativa:""});
+    renderTabela();
+}
+
+function removerBolsista(i){ if(confirm("Remover este bolsista?")){ bolsistas.splice(i,1); renderTabela(); }}
+
+// =========================
+// ENVIO PARA APPS SCRIPT
+// =========================
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyTQeo-agnSUOWcJqzpq7puobagg_IIivMgzo-7sLpQq9H_8SYwOQS0MBOv5NEzRwU0sQ/exec";
+
+async function salvarParaPlanilha(){
+    try{
+        const envio = bolsistas.map(b=>{
+            const copia = {...b};
+            if(b.arquivoBlob) copia.arquivoBlob = Utilities.base64Decode(b.arquivoBlob.replace(/^data:.*;base64,/, ""));
+            return copia;
+        });
+        const resp = await fetch(SCRIPT_URL,{
+            method:"POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(envio)
+        });
+        const json = await resp.json();
+        if(json.status==="ok") alert("Dados enviados com sucesso!");
+        else alert("Erro ao enviar: "+json.mensagem);
+    } catch(err){ alert("Erro ao enviar: "+err.message); }
+}
+
+// Inicializa
+renderTabela();
+</script>
+</body>
+</html>
